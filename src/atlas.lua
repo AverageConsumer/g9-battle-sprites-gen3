@@ -187,18 +187,13 @@ function Atlas.new(mod, load)
     local ok, t = pcall(load, "data/sprite_scale.lua")
     if ok and type(t) == "table" then tuning = t end
   end
-  -- how far each enemy front pic is raised so its feet are no lower than the platform's
-  -- centre (data/front_anchor.lua, tools/front_anchor.py); sprite_scale.lua's front_dy wins
-  local anchors = {}
-  do
-    local ok, t = pcall(load, "data/front_anchor.lua")
-    if ok and type(t) == "table" then anchors = t end
-  end
+  -- (where an enemy front pic's feet go is in the atlas itself: the cell's drop `fy`, which
+  -- tools/build_atlas.py works out for every species, with or without gen3-hd-sprites)
   local function tuned(slot)
     local rec = bySlot[tonumber(slot)]
     local own = rec and tuning[rec.id]
     local all = type(tuning.all) == "table" and tuning.all or {}
-    return type(own) == "table" and own or {}, all, rec and anchors[rec.id] or 0
+    return type(own) == "table" and own or {}, all
   end
 
   -- A page is loaded once and kept. A failed load is NOT kept: assets:path()
@@ -370,7 +365,7 @@ function Atlas.new(mod, load)
     -- 1:1 with the game's pixel grid (the atlas already holds game pixels), so a
     -- small species stays small; only a sprite larger than the box is reduced
     local s, ox, oy, wide, ls
-    local own, all, autoDy = tuned(dex)
+    local own, all = tuned(dex)
     local xmin, xmax, ymin, ymax = 0, PIC_BOX, 0, PIC_BOX
     if hd then
       -- the same layout as the wide canvas, but the canvas stays the 64x64 box: the
@@ -429,13 +424,16 @@ function Atlas.new(mod, load)
       -- hand-tuned size and nudge (data/sprite_scale.lua)
       local mul = tonumber(isBack and all.back or all.front) or 1
       local dx = tonumber(isBack and own.back_dx or own.front_dx) or 0
-      local dy = tonumber(isBack and own.back_dy or own.front_dy) or (isBack and 0 or autoDy)
+      local dy = tonumber(isBack and own.back_dy or own.front_dy) or 0
       local k = isBack and 1 or (tonumber(own.front) or 1)
       hd.tag(canvas, {
         texture = img, quad = quad,
         lowPivot = { lx + dx, ly + dy },
         pivot = { (lx - ox) / ls, (ly - oy) / ls },
         scale = ls * k * mul,
+        -- a front's first row of art over its whole animation: gen3-hd-sprites' Battle Fit
+        -- pulls the camera back to fit the art, not the frame's empty margin above it
+        top = not isBack and tonumber(cell.uy0) or nil,
       })
     elseif dexHd then
       -- the Pokedex: the whole frame at window resolution, fitted to the box exactly as the

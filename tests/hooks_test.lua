@@ -11,10 +11,10 @@ local function check(cond, msg)
 end
 
 -- a fake atlas: answers every slot it has art for -- the base species (451-1089,
--- dex + 64) and the alternate forms (1090-1174), plus the female Meowstic sheet kept under -742 -- with one cell per variant
+-- dex + 64) and the alternate forms (1090-1217), plus the female Meowstic sheet kept under -742 -- with one cell per variant
 -- the Gen 1-3 slots: 1-251, then Treecko .. Deoxys (277-411), minus Unown (201)
 local function has(slot)
-  return (slot >= 451 and slot <= 1174) or slot == -742
+  return (slot >= 451 and slot <= 1217) or slot == -742
     or (slot >= 1 and slot <= 251 and slot ~= 201) or (slot >= 277 and slot <= 411)
 end
 local calls = {}
@@ -61,7 +61,7 @@ check(Pokemon.backPic(451, 0, false).image.fake == "back", "dex 387 back comes f
 check(Pokemon.icon(451).fake_icon == 451, "dex 387 icon comes from the atlas")
 -- the top of the range, and one past it
 check(Pokemon.frontPic(1089, 0, false).image.fake == "front", "dex 1025 (slot 1089) from the atlas")
-check(Pokemon.frontPic(1175, 0, false).orig == "front", "slot 1175 (past the last form) stays vanilla")
+check(Pokemon.frontPic(1218, 0, false).orig == "front", "slot 1218 (past the last form) stays vanilla")
 
 -- a female Meowstic (slot 742) has a sheet of its own, reached by the personality
 do
@@ -159,6 +159,38 @@ do
   atlas.livePic, atlas.refreshLive = nil, nil
   Hooks._resetRseDex(nil)
   check(Pokemon.frontPic(500, 0, false, 0, "dex").image.fake == "front", "no Pokedex screen: the animated sheet")
+end
+
+-- the save editor: a front pic asked for without a kind is cut to the creature's own pixels
+do
+  local savedLove = love
+  local pasted
+  love = {
+    image = { newImageData = function(w, h)
+      return { w = w, h = h, paste = function(self, _, dx, dy, sx, sy, sw, sh) pasted = { sx, sy, sw, sh } end }
+    end },
+    graphics = { newImage = function(data)
+      return { data = data, setFilter = function() end, getDimensions = function() return data.w, data.h end }
+    end },
+  }
+  -- a 64x64 canvas whose creature fills x 20..29, y 40..59
+  local canvas = { newImageData = function()
+    return { getDimensions = function() return 64, 64 end,
+             getPixel = function(_, x, y) return 0, 0, 0, (x >= 20 and x <= 29 and y >= 40 and y <= 59) and 1 or 0 end }
+  end }
+  local out = Hooks.fit({ image = canvas, w = 64, h = 64 })
+  check(out.w == 10 and out.h == 20, "the editor's pic is the creature's own size")
+  check(pasted and pasted[1] == 20 and pasted[2] == 40, "cut from where the creature is")
+  check(Hooks.fit({ image = canvas }).image == out.image, "read once per canvas")
+  local blank = { newImageData = function()
+    return { getDimensions = function() return 4, 4 end, getPixel = function() return 0, 0, 0, 0 end }
+  end }
+  local entry = { image = blank, w = 64, h = 64 }
+  check(Hooks.fit(entry) == entry, "an empty canvas is returned as it is")
+  local image = { getDimensions = function() return 64, 64 end }   -- an Image cannot be read back
+  local plain = { image = image }
+  check(Hooks.fit(plain) == plain, "and so is a pic that cannot be read back")
+  love = savedLove
 end
 
 print(string.format("%d/%d checks passed (g9-battle-sprites-gen3 hooks)", passed, passed + failed))

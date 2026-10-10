@@ -12,9 +12,10 @@
 --   back     size of YOUR Pokemon's back pic, 1 = 100%. Default: zoomed in to match the cart's
 --            back sprite (tools/back_framing.py). Setting it replaces that zoom.
 --   front_dx, front_dy, back_dx, back_dy
---            nudge in game pixels (positive = right / down). The back default already puts the
---            body where the cart's back sprite has it. front_dy's default is data/front_anchor.lua
---            (feet raised to the platform's centre); setting front_dy here replaces it.
+--            nudge in game pixels (positive = right / down), on top of where the sprite already
+--            stands: the back on the cart's framing, the front with its feet on the platform's
+--            centre (worked out in the atlas, with or without HD Sprites). These nudges are HD
+--            Sprites only; a nudge for everyone goes in the atlas (FRONT_NUDGE, tools/build_atlas.py).
 --
 -- `all` below scales every Pokemon on top of the above (1 = no change).
 --

@@ -17,3 +17,16 @@ tools/back_fit.py
 tools/back_fit.json
 tests/back_framing_coverage_test.lua
 tools/front_anchor.py
+tools/front_feet.py
+tools/front_pose.py
+tools/front_drop.json
+tests/front_pose_test.py
+tools/front_anchor.json
+tools/build_dist.py
+
+DEVELOPMENT.md
+CLAUDE.md
+
+# dist/ (managed by tools/build_dist.py; do not edit)
+dist/g9-battle-sprites-gen3-1.4.1.zip
+# end dist/

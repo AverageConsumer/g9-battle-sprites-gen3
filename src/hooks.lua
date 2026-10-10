@@ -116,6 +116,50 @@ function Hooks.tickRseDex(atlas)
   end
 end
 
+-- The gen1recomp save editor draws a species pic scaled to fit its slot. The engine's own pics
+-- fill their 64x64 box, but ours keep the game's true size, so a small species sits in a mostly
+-- empty canvas and came out a speck. When the editor is the host (main.lua sets Hooks.inEditor),
+-- a front pic asked for without a `kind` (the editor's call) is cut to the creature's own pixels,
+-- read once per canvas. Anything that cannot be read back is returned as it is.
+Hooks.inEditor = false
+local fitted = setmetatable({}, { __mode = "k" })
+function Hooks.fit(entry)
+  local canvas = type(entry) == "table" and entry.image
+  if not (canvas and love and love.image and love.graphics) then return entry end
+  local hit = fitted[canvas]
+  if hit == nil then
+    local ok, cut = pcall(function()
+      if type(canvas.newImageData) ~= "function" then return false end
+      local data = canvas:newImageData()
+      local pw, ph = data:getDimensions()
+      local x0, y0, x1, y1 = pw, ph, -1, -1
+      for py = 0, ph - 1 do
+        for px = 0, pw - 1 do
+          local _, _, _, a = data:getPixel(px, py)
+          if a > 0.05 then
+            if px < x0 then x0 = px end
+            if px > x1 then x1 = px end
+            if py < y0 then y0 = py end
+            if py > y1 then y1 = py end
+          end
+        end
+      end
+      if x1 < x0 then return false end
+      local w, h = x1 - x0 + 1, y1 - y0 + 1
+      local part = love.image.newImageData(w, h)
+      part:paste(data, 0, 0, x0, y0, w, h)
+      local img = love.graphics.newImage(part)
+      img:setFilter("nearest", "nearest")
+      return img
+    end)
+    hit = ok and cut or false
+    fitted[canvas] = hit
+  end
+  if not hit then return entry end
+  local w, h = hit:getDimensions()
+  return { image = hit, w = w, h = h }
+end
+
 function Hooks.install(Pokemon, atlas, Battle)
   if type(Pokemon) ~= "table" then return 0 end
   local wrapped = 0
@@ -167,6 +211,7 @@ function Hooks.install(Pokemon, atlas, Battle)
       end
       local entry = not inForm(form)
         and picFor(atlas, "front", keyFor(atlas, Pokemon, species, personality), shiny, inBattle(), kind)
+      if entry and Hooks.inEditor and kind == nil then return Hooks.fit(entry) end
       if entry then return entry end
       return origFront(species, form, shiny, personality, kind)
     end

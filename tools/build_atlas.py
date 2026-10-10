@@ -248,8 +248,27 @@ def creature_box(boxes: list[tuple[int, int, int, int]]) -> tuple[int, int, int,
 
 # Front pics drawn lower than the frame's bottom edge puts them, in px, by species id: a tall front
 # frame whose creature floats high (Noivern's) would otherwise stand above the top of the screen.
-# Written to the front cells as `fy`.
-FRONT_DROP = {"NOIVERN": 20}
+# Written to the front cells as `fy`. FRONT_DROP_MANUAL is set by hand; tools/front_drop.json
+# (tools/front_feet.py --write) adds the grounded species whose art leaves them floating above the
+# platform (Litten); a hand-set value wins.
+FRONT_DROP_MANUAL = {"NOIVERN": 20}
+_drop_file = ROOT / "tools" / "front_drop.json"
+FRONT_DROP = {**(json.loads(_drop_file.read_text(encoding="utf-8")) if _drop_file.exists() else {}),
+              **FRONT_DROP_MANUAL}
+# The raise of the front sprites whose feet would rest below the platform centre
+# (tools/front_anchor.py -> tools/front_anchor.json, worked out from FRONT_DROP's positions).
+_raise_file = ROOT / "tools" / "front_anchor.json"
+FRONT_RAISE = json.loads(_raise_file.read_text(encoding="utf-8")) if _raise_file.exists() else {}
+# Hand nudges, in px (positive = down), on top of the drop and the raise: the species whose
+# animation still dips into the player's health box or sits off (tools/front_feet.py --dips).
+FRONT_NUDGE = {
+    "GLIMMET": -6, "TADBULB": -8, "CHI_YU": -4, "KYOGRE": -4, "IGGLYBUFF": -4, "KINGDRA": 4,
+}
+
+
+def front_fy(sid: str) -> int:
+    """The front cell's whole drop: FRONT_DROP + FRONT_RAISE + FRONT_NUDGE (0 = none)."""
+    return int(FRONT_DROP.get(sid, 0) + FRONT_RAISE.get(sid, 0) + FRONT_NUDGE.get(sid, 0))
 
 
 BACK_SCALES = (1.0, 1.5, 2.0)   # the clean steps a back sprite may be upscaled by (2 px art pixels -> 2/3/4 px)
@@ -415,8 +434,12 @@ def build_battle(sheets: Path, dbk: dict[str, str], species: list[tuple[int, str
                             cell["bz"] = float(fit["s"])
                             cell["bzt"] = int(fit["t"])
                             cell["bzx"] = float(fit["x"])
-                if variant not in BACK_VARIANTS and sid in FRONT_DROP:
-                    cell["fy"] = FRONT_DROP[sid]
+                if variant not in BACK_VARIANTS and extent:
+                    # the first row of art over the whole animation: gen3-hd-sprites' Battle Fit
+                    # fits the art under the top of the screen, not the frame's empty margin
+                    cell["uy0"] = extent[1]
+                if variant not in BACK_VARIANTS and front_fy(sid):
+                    cell["fy"] = front_fy(sid)
                 index.setdefault(sid, {})[variant] = cell
                 start += frames
         names = save(shelf.pages, f"battle_{variant}", out_dir, used_w, used_h)
@@ -611,6 +634,7 @@ def write_index(index: dict[str, dict], path: Path, species: list[tuple[int, str
         "-- row; frame n of a species is cell start + n. Back cells also carry cx0, cy0, cx1,",
         "-- cy1: the creature's typical box inside its frame (what it is anchored on); ux0, uy0,",
         "-- ux1, uy1: the union of its box over the whole animation (how much room it needs).",
+        "-- Front cells carry uy0: the first row of art over the whole animation.",
         "-- party_icons_<page>.png: `frames` 32x32 cells side by side from x, y.",
         "-- dex_fronts_<page>.png (dexpic): the cart's two 64x64 front frames side by side from x, y.",
         "-- slot: the engine species slot the entry answers for. A form (WORMADAM_SANDY) has a",
@@ -635,6 +659,8 @@ def write_index(index: dict[str, dict], path: Path, species: list[tuple[int, str
                 if "cx0" in c:
                     text += f', cx0 = {c["cx0"]}, cy0 = {c["cy0"]}, cx1 = {c["cx1"]}, cy1 = {c["cy1"]}'
                     text += f', ux0 = {c["ux0"]}, uy0 = {c["uy0"]}, ux1 = {c["ux1"]}, uy1 = {c["uy1"]}'
+                elif "uy0" in c:
+                    text += f', uy0 = {c["uy0"]}'
                 if "fy" in c:
                     text += f', fy = {c["fy"]}'
                 if "bt" in c:

@@ -55,6 +55,9 @@ return function(mod)
       mod.log:error("the gen 3 Pokemon module is not available -- no sprites will draw")
       return
     end
+    -- the save editor is the only host with its own `Gen` module (Hooks.fit)
+    local okGen, Gen = pcall(require, "Gen")
+    Hooks.inEditor = okGen and type(Gen) == "table" and type(Gen.bindGame3Data) == "function"
     local n = Hooks.install(Pokemon, atlas)
     mod.log:info("hooked %d picture functions", n)
     if type(Pokemon.onReload) == "function" then
