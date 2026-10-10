@@ -37,9 +37,13 @@ import glob
 import json
 import os
 import re
+import sys
 from pathlib import Path
 
 from PIL import Image
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import front_pose as fp  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 FIRST_DEX, LAST_DEX = 387, 1025
@@ -295,7 +299,15 @@ def trim_window(trims: dict, sid: str, variant: str, frames: int) -> tuple[int, 
     return (start, count) if 0 <= start and count >= 1 and start + count <= frames else None
 
 
-MIN_BACK_SHOWN = 28     # rows of a back pic that always show above the battle text box
+# The player's back pic stands on its feet like the enemy's front: its resting pose's bottom on
+# the middle of the player's pad, y 119. The fronts stand on the enemy pad's middle (y 66), and
+# the player's pad is the same oval 53 px lower (gen3-hd-sprites src/pads.lua), so a little of the
+# feet is under the text box (its top is y 112), as on the cart. In box rows, on FireRed /
+# LeafGreen / Emerald, whose pic centre is y 84 + the engine's per-species offset
+# (battle/ui.lua battler_sprite_center), that is row 67 - offset; Ruby / Sapphire draw it 4 px
+# higher and the runtime adds those 4 back (src/atlas.lua backShift). gen3-hd-sprites' Battle Fit
+# zooms the scene out about the text box's top, so a tall back still fits.
+BACK_FEET_ROW = 67
 ENGINE_PIC_COORDS = ROOT.parent / "gen1recomp" / "src" / "core" / "game3" / "battle" / "pic_coords.lua"
 
 
@@ -308,29 +320,9 @@ def back_offsets(path: Path) -> dict[int, int]:
     return {int(a): int(b) for a, b in re.findall(r"\[(\d+)\]\s*=\s*(-?\d+)", m.group(1))} if m else {}
 
 
-def cap_back_tops(index: dict, slots: dict, coords: Path) -> int:
-    """A body whose top, with the engine's own offset, would start below row 64 - MIN_BACK_SHOWN of
-    the pic box leaves a big empty gap above the text box (Wailord, Anorith): raise it to that row.
-    Applies to the plain and the fitted (gen3-hd-sprites) top alike."""
-    yo = back_offsets(coords)
-    limit = 64 - MIN_BACK_SHOWN
-    n = 0
-    for sid, entry in index.items():
-        off = yo.get(slots.get(sid, -1), 0)
-        for key in ("back", "back_shiny"):
-            c = entry.get(key)
-            if not c:
-                continue
-            for field in ("bt", "bzt"):
-                if field in c and c[field] + off > limit:
-                    c[field] = max(0, limit - off)
-                    n += 1
-    return n
-
-
 def build_battle(sheets: Path, dbk: dict[str, str], species: list[tuple[int, str]],
                  out_dir: Path, index: dict[str, dict], trims: dict | None = None,
-                 framing: dict | None = None, fits: dict | None = None) -> None:
+                 back_lines: dict | None = None) -> None:
     """Battle frames are grouped by their game-pixel frame size. A group is cut
     into blocks of uniform fs x fs cells (a species' frames stay together in
     one block), and the blocks of every size are shelf-packed onto shared pages
@@ -419,21 +411,12 @@ def build_battle(sheets: Path, dbk: dict[str, str], species: list[tuple[int, str
                     # runtime can anchor on it rather than on the frame's empty margins
                     cell.update({"cx0": box[0], "cy0": box[1], "cx1": box[2], "cy1": box[3],
                                  "ux0": extent[0], "uy0": extent[1], "ux1": extent[2], "uy1": extent[3]})
-                    ref = (framing or {}).get(sid)
-                    if ref:
-                        # the cart's own framing of this species (tools/back_framing.py): the row its
-                        # body's top sits on and the scale that brings our body to its on-screen height
-                        cell["bt"] = int(ref["t"])
-                        cell["bx"] = float(ref.get("x", 32))      # the reference body's centre column
-                        cell["bv"] = int(ref["v"])      # the reference body's height: the exact zoom with gen3-hd-sprites
-                        cell["bs"] = back_scale(int(ref["v"]), box[3] - box[1])
-                        fit = (fits or {}).get(sid)
-                        if fit:
-                            # fitted over the cart's own static back sprite (tools/back_fit.py): the exact
-                            # zoom, row and column that lay our first frame's body on top of it
-                            cell["bz"] = float(fit["s"])
-                            cell["bzt"] = int(fit["t"])
-                            cell["bzx"] = float(fit["x"])
+                    # stood on its feet like the fronts: its resting pose's bottom row (the
+                    # frames most alike, tools/front_pose.py) goes on the player's feet line
+                    rest = fp.rest_bottom([img.crop((n * fs, 0, (n + 1) * fs, fs)) for n in range(frames)])
+                    if rest is not None:
+                        cell["bfr"] = int(rest)
+                        cell["bfl"] = int((back_lines or {}).get(sid, BACK_FEET_ROW))
                 if variant not in BACK_VARIANTS and extent:
                     # the first row of art over the whole animation: gen3-hd-sprites' Battle Fit
                     # fits the art under the top of the screen, not the frame's empty margin
@@ -663,10 +646,8 @@ def write_index(index: dict[str, dict], path: Path, species: list[tuple[int, str
                     text += f', uy0 = {c["uy0"]}'
                 if "fy" in c:
                     text += f', fy = {c["fy"]}'
-                if "bt" in c:
-                    text += f', bt = {c["bt"]}, bs = {c["bs"]:g}, bv = {c["bv"]}, bx = {c["bx"]:g}'
-                    if "bz" in c:
-                        text += f', bz = {c["bz"]:g}, bzt = {c["bzt"]}, bzx = {c["bzx"]:g}'
+                if "bfr" in c:
+                    text += f', bfr = {c["bfr"]}, bfl = {c["bfl"]}'
                 parts.append(text + " }")
         if "icon" in entry:
             c = entry["icon"]
@@ -720,14 +701,9 @@ def main() -> None:
                     help="which frames of each long animation to keep (tools/trim_loops.py)")
     ap.add_argument("--dex-ref", type=Path, default=DEX_REF,
                     help="pokeemerald-expansion's graphics/pokemon (the cart front pics for the RSE Pokedex)")
-    ap.add_argument("--framing", type=Path, default=ROOT / "tools" / "back_framing.json",
-                    help="each back sprite's cart reference (tools/back_framing.py)")
     ap.add_argument("--out", type=Path, default=ROOT)
     args = ap.parse_args()
     trims = json.loads(args.trims.read_text(encoding="utf-8")) if args.trims.exists() else {}
-    framing = json.loads(args.framing.read_text(encoding="utf-8")) if args.framing.exists() else {}
-    fits_path = ROOT / "tools" / "back_fit.json"
-    fits = json.loads(fits_path.read_text(encoding="utf-8")) if fits_path.exists() else {}
 
     species = read_species_ids(args.payload)
     forms = read_forms(args.payload)
@@ -755,12 +731,17 @@ def main() -> None:
           f"Gen 1-3: {len(classic)}")
     dex_of = {sid: dex for dex, sid in species}
     females = [(dex_of[base], fid) for fid, base in FEMALE_SHEETS.items() if base in dex_of]
-    build_battle(args.sheets, dbk, classic + species + females, out_atlas, index, trims, framing, fits)
+    # each back's feet row in its pic box: BACK_FEET_ROW less the engine's offset for its slot
+    yo = back_offsets(ENGINE_PIC_COORDS)
+    slot_of = dict(slots)
+    for fid, base in FEMALE_SHEETS.items():
+        if base in slots:
+            slot_of[fid] = slots[base]
+    back_lines = {sid: BACK_FEET_ROW - yo.get(slot, 0) for sid, slot in slot_of.items()}
+    build_battle(args.sheets, dbk, classic + species + females, out_atlas, index, trims, back_lines)
     build_icons(args.icons_dir, species, out_atlas, index, dbk, form_ids)
     build_dex_fronts(args.dex_ref, [(d, s) for d, s in classic + species if s not in FEMALE_SHEETS],
                      out_atlas, index)
-    capped = cap_back_tops(index, slots, ENGINE_PIC_COORDS)
-    print(f"  back pics raised so {MIN_BACK_SHOWN}+ rows show above the text box: {capped} cells")
     # a form with no sheet or icon of its own in the pack reuses its base's
     reused = 0
     for _dex, fid, _slot, base in forms:

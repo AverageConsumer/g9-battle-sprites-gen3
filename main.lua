@@ -83,7 +83,18 @@ return function(mod)
     end
   end
 
+  -- Ruby / Sapphire draw the player's pic 4 px higher than FireRed / LeafGreen / Emerald
+  -- (battle/ui.lua battler_sprite_center): lower the backs by those 4 so the feet line holds
+  local function setBackShift()
+    local ok, rs = pcall(function()
+      local ui = require("src.core.game3.profile").forSession().ui
+      return ui and ui.battleSpriteLayout == "rs"
+    end)
+    Atlas.backShift = (ok and rs) and 4 or 0
+  end
+
   mod.events:on("game.ready", function(ev)
+    setBackShift()
     install(ev and ev.game or mod.game)
     linkHd()
   end, 0)

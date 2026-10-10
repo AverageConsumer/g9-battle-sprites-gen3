@@ -1,7 +1,9 @@
 -- Run from the mod root: luajit tests/back_framing_coverage_test.lua
 -- Every back sprite the atlas packs has its body box (from the first frame of the kept
--- animation) and its cart framing: the row its body's top sits on (0-63) and one of the clean
--- scales. Female sheets and forms that reuse a base species' art share its cells.
+-- animation) and stands on its feet: its resting pose's bottom row (`bfr`, inside the frame)
+-- and the player's feet line in its pic box (`bfl`, tools/build_atlas.py BACK_FEET_ROW less the
+-- engine's offset for the slot). Female sheets and forms that reuse a base species' art share
+-- its cells.
 local index = dofile("data/atlas_index.lua").species
 
 local passed, failed = 0, 0
@@ -9,8 +11,6 @@ local function check(cond, msg)
   if cond then passed = passed + 1 else failed = failed + 1; print("FAIL: " .. msg) end
 end
 
-local scales = { [1] = true, [1.5] = true, [2] = true }
-local counts = { [1] = 0, [1.5] = 0, [2] = 0 }
 local n = 0
 for id, rec in pairs(index) do
   for _, variant in ipairs({ "back", "back_shiny" }) do
@@ -20,19 +20,18 @@ for id, rec in pairs(index) do
       check(c.cx0 and c.cx1 > c.cx0 and c.cy1 > c.cy0, id .. " " .. variant .. " has a body box")
       check(c.ux0 and c.ux0 <= c.cx0 and c.ux1 >= c.cx1 and c.uy0 <= c.cy0 and c.uy1 >= c.cy1,
         id .. " " .. variant .. ": the animation's box contains the body's")
-      check(c.bt and c.bt >= 0 and c.bt <= 63, id .. " " .. variant .. " has a reference row (0-63)")
-      check(scales[c.bs], id .. " " .. variant .. " has a clean scale, got " .. tostring(c.bs))
-      if c.bs and counts[c.bs] then counts[c.bs] = counts[c.bs] + 1 end
+      check(c.bfr and c.bfr > 0 and c.bfr <= c.fs, id .. " " .. variant .. " has its feet row in the frame")
+      check(c.bfl and c.bfl >= 30 and c.bfl <= 80, id .. " " .. variant .. " has a feet line in the box, got "
+        .. tostring(c.bfl))
+      check(c.bt == nil and c.bs == nil, id .. " " .. variant .. " has no cart framing left")
     end
   end
 end
 check(n >= 2200, "a back and a shiny back for every species (" .. n .. ")")
-check(counts[1] > counts[1.5] and counts[1.5] >= counts[2], "most sprites stay at 1x")
--- a shiny back shares its normal sheet's framing
+-- a shiny back stands where its normal sheet does
 for id, rec in pairs(index) do
   if rec.back and rec.back_shiny then
-    check(rec.back.bt == rec.back_shiny.bt and rec.back.bs == rec.back_shiny.bs,
-      id .. ": shiny shares the framing")
+    check(rec.back.bfl == rec.back_shiny.bfl, id .. ": shiny shares the feet line")
   end
 end
 

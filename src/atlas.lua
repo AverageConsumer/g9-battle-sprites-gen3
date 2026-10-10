@@ -41,6 +41,10 @@ local BACK_ZOOM_MIN = 1      -- the exact zoom (gen3-hd-sprites) only zooms IN, 
 local BACK_ZOOM_MAX = 3
 local BACK_RAISE = 4         -- px a back pic WITHOUT a cart reference is lifted, to sit on the platform
 
+-- px the player's back pic is lowered on top of its cell's feet line: 4 on Ruby / Sapphire,
+-- which draw the player's pic 4 px higher than FireRed / LeafGreen / Emerald (set by main.lua)
+Atlas.backShift = 0
+
 --- Where a back pic's frame goes in the PIC_BOX x PIC_BOX box: scale `s` and the
 --- frame's top-left (`ox`, `oy`), in box px, plus the canvas's extent `xmin`, `xmax`,
 --- `ymin`, `ymax` in box px (0 .. PIC_BOX unless `wide`). `cell` carries the
@@ -57,7 +61,17 @@ function Atlas.backLayout(cell, wide, exact, force)
   local x1, y1 = cell.cx1 or fs, cell.cy1 or fs
   local cw, ch = math.max(1, x1 - x0), math.max(1, y1 - y0)
   local s, oy, anchorX, zoomTop
-  if cell.bt then
+  if cell.bfl and cell.bfr then
+    -- stood on its feet, like the fronts: the resting pose's bottom row (`bfr`, source px) on
+    -- the player's feet line (`bfl`, box rows; tools/build_atlas.py BACK_FEET_ROW), at the art's
+    -- own size. A size set by hand (data/sprite_scale.lua, HD only) scales about the feet.
+    if wide or exact then
+      s = force or 1
+    else
+      s = math.min(1, PIC_BOX / (BACK_MIN_W * cw), PIC_BOX / (BACK_MIN_H * ch))
+    end
+    oy = cell.bfl + Atlas.backShift - s * cell.bfr
+  elseif cell.bt then
     -- framed like the cart: the body's top on the reference's row, at the reference's size
     s = cell.bs or 1
     if exact and cell.bv then

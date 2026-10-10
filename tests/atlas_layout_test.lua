@@ -190,5 +190,22 @@ do
   love = nil
 end
 
+-- stood on its feet: the resting pose's bottom row (bfr) on the feet line (bfl), at 1:1
+do
+  local cell = { fs = 96, cx0 = 20, cy0 = 10, cx1 = 70, cy1 = 80, ux0 = 18, uy0 = 4, ux1 = 74, uy1 = 82,
+                 bfr = 80, bfl = 67 }
+  local s, ox, oy, _, _, ymin = Atlas.backLayout(cell, true)
+  check(s == 1, "a back on its feet is drawn at its own size (s = " .. s .. ")")
+  check(near(oy + 80, 67), "its feet row lands on the feet line (oy = " .. oy .. ")")
+  check(near(ox, 32 - 45), "centred on the body (ox = " .. ox .. ")")
+  check(ymin <= oy + 4, "the canvas reaches up to the animation's top (ymin = " .. ymin .. ")")
+  local s2, _, oy2 = Atlas.backLayout(cell, true, true, 0.5)
+  check(s2 == 0.5 and near(oy2 + 0.5 * 80, 67), "a size set by hand scales about the feet")
+  Atlas.backShift = 4
+  local _, _, oy3 = Atlas.backLayout(cell, true)
+  check(near(oy3, oy + 4), "Ruby / Sapphire lower it 4 px (their pic sits 4 px higher)")
+  Atlas.backShift = 0
+end
+
 print(string.format("%d/%d checks passed (atlas back layout)", passed, passed + failed))
 if failed > 0 then os.exit(1) end

@@ -34,15 +34,20 @@ Output is deterministic: the same inputs give identical bytes. Supporting tools:
 - `tools/trim_loops.py` -> `tools/loop_trims.json`: long animations are trimmed to the median
   length of their kind (58 frames for fronts, 52 for backs), cut where the loop closes on a
   matching frame; a sheet with no clean loop keeps every frame.
-- `tools/back_framing.py` -> `tools/back_framing.json`: back pics are framed like the cart's:
-  the top of the body on the row the cart sprite's body starts, at the clean scale (1×, 1.5× or
-  2×, never below 1×) nearest the cart sprite's height, measured on the first frame. A body
-  starting so low that fewer than 28 rows show above the text box is raised
-  (`MIN_BACK_SHOWN` in `tools/build_atlas.py`); a Pokémon with no reference is shown whole,
-  feet on the bottom edge.
-- `tools/back_fit.py` -> `tools/back_fit.json`: with Gen 3 HD Sprites, a Gen 1–3 back pic is
-  zoomed and placed over the cart's own back sprite (best silhouette overlap, or bounding boxes
-  when the poses differ too much).
+- `tools/front_pose.py`: the resting pose of an animation (the frames most alike) and its median
+  bottom row: where a Pokémon's feet are, for fronts and backs alike.
+- Fronts stand on the enemy pad's middle (y 66): `tools/front_feet.py --write` ->
+  `tools/front_drop.json` (grounded species floating 8 px or more are lowered), then
+  `tools/front_anchor.py write` -> `tools/front_anchor.json` (those resting too low are raised);
+  `FRONT_NUDGE` in `tools/build_atlas.py` holds hand nudges. All of it is baked into the front
+  cell's drop `fy`, so it holds with and without Gen 3 HD Sprites. `front_feet.py --dips` /
+  `--tops` list sprites dipping into the player's HP box or going above the window.
+- Backs stand on the player pad's middle (y 119, partly under the text box as on the cart), at
+  their own size: the build writes each back cell's resting feet row `bfr` and its feet line in
+  the pic box `bfl` (`BACK_FEET_ROW` less the engine's per-species back offset). Ruby / Sapphire
+  draw the player's pic 4 px higher; `Atlas.backShift` adds them back at runtime. A tall back is
+  left to Gen 3 HD Sprites' Battle Fit. (`tools/back_framing.py` and `tools/back_fit.py`, the old
+  cart framing, are no longer used by the build.)
 
 Every file under `tools/` and `tests/` is listed by exact path in `.modkitignore` so none of
 them ships; add a line for each new one.
