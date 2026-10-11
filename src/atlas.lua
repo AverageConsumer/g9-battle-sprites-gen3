@@ -41,28 +41,29 @@ local BACK_ZOOM_MIN = 1      -- the exact zoom (gen3-hd-sprites) only zooms IN, 
 local BACK_ZOOM_MAX = 3
 local BACK_RAISE = 4         -- px a back pic WITHOUT a cart reference is lifted, to sit on the platform
 
--- Realism scaling (gen3-hd-sprites only): a Pokemon's size from its real height. L = ln(h /
--- center), span = ln(tallest / center); s = 1 + grow * (L / span)^curve above the neutral height
--- and s = 1 - grow * (|L| / span)^curve below it: the same rate per doubling of height both ways
--- (a Pokemon a quarter of a person's height shrinks as much as one four times taller grows),
--- held between `floor` and 1 + grow. Heights in metres; `htDm` is the index's `ht`
--- (decimetres). Returns 1 when off, or with no height. Pure.
-Atlas.REALISM = { on = true, center = 1.65, grow = 0.60, floor = 0.55, curve = 1.0,
-                  tallest = 20, front = 0.85, match_backs = true }
+-- Realism scaling (gen3-hd-sprites only): a Pokemon's size from its real height, pulled toward
+-- the neutral height like a rubber band. L = ln(h / center); above the neutral height
+-- s = 1 + grow * (L / ln(tallest / center))^curve, below it s = 1 - shrink * (|L| /
+-- ln(center / shortest))^curve, so only the true extremes reach the limits. Heights in metres;
+-- `htDm` is the index's `ht` (decimetres). Returns 1 when off, or with no height. Pure.
+Atlas.REALISM = { on = true, center = 1.65, grow = 0.25, shrink = 0.15, curve = 1.5,
+                  shortest = 0.1, tallest = 20, front = 0.85, match_backs = true }
 function Atlas.realism(htDm, cfg)
   cfg = cfg or Atlas.REALISM
   local h = tonumber(htDm)
   if cfg.on == false or not h or h <= 0 then return 1 end
   h = h / 10
   local function n(key) return tonumber(cfg[key]) or Atlas.REALISM[key] end
-  local center, p, grow = n("center"), n("curve"), n("grow")
-  local span = math.log(n("tallest") / center)
-  if span <= 0 then return 1 end
+  local center, p = n("center"), n("curve")
   local L = math.log(h / center)
   if L > 0 then
-    return 1 + grow * math.min(1, L / span) ^ p
+    local span = math.log(n("tallest") / center)
+    if span <= 0 then return 1 end
+    return 1 + n("grow") * math.min(1, L / span) ^ p
   elseif L < 0 then
-    return math.max(n("floor"), 1 - grow * (-L / span) ^ p)
+    local span = math.log(center / n("shortest"))
+    if span <= 0 then return 1 end
+    return 1 - n("shrink") * math.min(1, -L / span) ^ p
   end
   return 1
 end

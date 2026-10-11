@@ -42,11 +42,11 @@ local function near(a, b, e) return math.abs(a - b) < (e or 1e-6) end
 -- the curve
 local R = Atlas.realism
 check(near(R(16.5), 1), "the neutral height (1.65 m) keeps its size")
-check(near(R(200), 1.60), "the tallest (20 m) grows 60% (" .. R(200) .. ")")
-check(near(R(1), 0.55), "the shortest (0.1 m) stops at the floor, 55% (" .. R(1) .. ")")
-check(near(R(2000), 1.60) and near(R(0.5), 0.55), "past the limits it holds the limit")
-check(near(R(4), 0.659, 0.002), "Pikachu (0.4 m) about 66% (" .. R(4) .. ")")
-check(near(R(145), 1.523, 0.002), "Wailord (14.5 m) about 152% (" .. R(145) .. ")")
+check(near(R(200), 1.25), "the tallest (20 m) grows 25% (" .. R(200) .. ")")
+check(near(R(1), 0.85), "the shortest (0.1 m) shrinks 15% (" .. R(1) .. ")")
+check(near(R(2000), 1.25) and near(R(0.5), 0.85), "past the limits it holds the limit")
+check(near(R(4), 0.946, 0.002), "Pikachu (0.4 m) about 95% (" .. R(4) .. ")")
+check(near(R(145), 1.203, 0.002), "Wailord (14.5 m) about 120% (" .. R(145) .. ")")
 local prev = 0
 local mono = true
 for dm = 1, 200 do
@@ -58,9 +58,7 @@ check(mono, "taller is never smaller")
 check(R(nil) == 1 and R(0) == 1, "no height: no change")
 check(R(200, { on = false }) == 1, "off: no change")
 check(near(R(200, { grow = 0.1 }), 1.1), "the settings are read")
--- the same rate both ways: a quarter of the neutral height shrinks as much as four times grows
-check(near(1 - R(16.5 / 4), R(16.5 * 4) - 1), "shrinking is as strong as growing (" .. R(16.5 / 4) .. ", " .. R(66) .. ")")
-check(near(R(1, { floor = 0.7 }), 0.7), "the floor is read")
+check(near(R(1, { shrink = 0.3 }), 0.7), "the shrink is read")
 
 -- the HD tags: sizes and feet
 local index = { species = {
@@ -69,7 +67,7 @@ local index = { species = {
     front = { sheet = 0, start = 0, fs = 96, cols = 10, frames = 1, ox = 0, oy = 0, ffr = 90 },
     back = { sheet = 0, start = 0, fs = 96, cols = 10, frames = 1, ox = 0, oy = 0, cx0 = 20, cy0 = 10,
              cx1 = 70, cy1 = 80, ux0 = 18, uy0 = 4, ux1 = 74, uy1 = 82, bfr = 80, bfl = 67 } },
-  -- a 20 m Pokemon: realism 1.60
+  -- a 20 m Pokemon: realism 1.25
   -- a 1.65 m Pokemon whose back art is drawn smaller than its front: bn 1.2
   NORM = { dex = 402, slot = 466, ht = 16.5,
     back = { sheet = 0, start = 0, fs = 96, cols = 10, frames = 1, ox = 0, oy = 0, cx0 = 20, cy0 = 10,
@@ -104,7 +102,7 @@ do
   check(mid and near(mid.scale, 0.85), "a 1.65 m front: only the perspective, 85% (" .. tostring(mid and mid.scale) .. ")")
   check(mid and mid.pivot[2] == 90, "the front scales about its feet row (ffr)")
   local big = hd.tags[atlas.picFrame(465, "front", atlas.cell(465, "front"), 0, true)]
-  check(big and near(big.scale, 1.60 * 0.85), "a 20 m front: 160% x 85% (" .. tostring(big and big.scale) .. ")")
+  check(big and near(big.scale, 1.25 * 0.85), "a 20 m front: 125% x 85% (" .. tostring(big and big.scale) .. ")")
   local mx, my = feet(mid)
   local bx, by = feet(big)
   check(near(mx, bx) and near(my, by), "both stand on the same spot whatever their size")
@@ -112,7 +110,7 @@ do
   check(mb and near(mb.scale, 1), "a 1.65 m back: its own size, no perspective")
   check(mb and mb.pivot[2] == 80 and near(mb.pivot[1], 45), "the back scales about its feet (bfr, body centre)")
   local bb = hd.tags[atlas.picFrame(465, "back", atlas.cell(465, "back"), 0, true)]
-  check(bb and near(bb.scale, 1.60), "a 20 m back: 160% (" .. tostring(bb and bb.scale) .. ")")
+  check(bb and near(bb.scale, 1.25), "a 20 m back: 125% (" .. tostring(bb and bb.scale) .. ")")
   local x1, y1 = feet(mb)
   local x2, y2 = feet(bb)
   check(near(x1, x2) and near(y1, y2) and near(y1, 67), "backs keep their feet on the line (y " .. y1 .. ")")
@@ -138,7 +136,7 @@ do
   local atlas = newAtlas({ BIG = { front = 0.5 } })
   local hd = fakeHd(); atlas.hd = hd
   local big = hd.tags[atlas.picFrame(465, "front", atlas.cell(465, "front"), 0, true)]
-  check(big and near(big.scale, 0.5 * 1.60 * 0.85), "a hand-set size multiplies the realism")
+  check(big and near(big.scale, 0.5 * 1.25 * 0.85), "a hand-set size multiplies the realism")
 end
 
 print(string.format("%d/%d checks passed (g9-battle-sprites-gen3 realism)", passed, passed + failed))

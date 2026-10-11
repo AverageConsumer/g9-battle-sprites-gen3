@@ -21,12 +21,11 @@
 -- `realism` sizes each Pokemon by its real height (the Pokedex's), on top of the above:
 --   on       false turns it off (every Pokemon at its sprite's own size)
 --   center   the neutral height in metres (1.65 = 5'5"): a Pokemon this tall keeps its size
---   grow     how much the tallest grows (0.60 = 60% bigger at `tallest`); small Pokemon
---            shrink at the same rate per halving of height (Pikachu 66%)
---   floor    the smallest a Pokemon is drawn (0.55 = 55%: Joltik, Flabebe)
---   curve    1 = even steps in height; higher = more Pokemon stay near their own size and
---            only the true extremes reach the limits
---   tallest  the height (m) that gets the full `grow`
+--   grow     how much the tallest grows (0.25 = 25% bigger at `tallest`)
+--   shrink   how much the shortest shrinks (0.15 = 15% smaller at `shortest`)
+--   curve    the rubber band: 1 = even steps, higher = more Pokemon stay near their own size
+--            and only the true extremes reach the limits (1.5: Pikachu 95%, Gyarados 110%)
+--   shortest, tallest   the heights (m) that get the full shrink / grow
 --   front    the enemy's front pic is this much smaller for perspective (it stands farther
 --            away; the cart's own fronts are about 0.90 the width of its backs, and 0.85 reads
 --            better next to the art's own sizes)
@@ -42,8 +41,8 @@
 return {
   all = { front = 1, back = 1 },
 
-  realism = { on = true, center = 1.65, grow = 0.60, floor = 0.55, curve = 1.0,
-              tallest = 20, front = 0.85, match_backs = true },
+  realism = { on = true, center = 1.65, grow = 0.25, shrink = 0.15, curve = 1.5,
+              shortest = 0.1, tallest = 20, front = 0.85, match_backs = true },
 
   NOIVERN = { front = 0.6, front_dy = -2 },
 }

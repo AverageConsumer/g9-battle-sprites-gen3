@@ -52,9 +52,8 @@ Output is deterministic: the same inputs give identical bytes. Supporting tools:
   `realism`): each species' height `ht` (dm) is written to the index from the cart's Pokédex
   entries (`pokemon/pokedex/entries.lua`, keyed by engine slot) for Gen 1–3 and national_dex_gen3's
   `dexEntry.height` (PokeAPI) for #387+; forms and female sheets take their base's. The scale is a
-  power curve on log height around 1.65 m: up to +60% at 20 m and down at the same rate per halving of height (Pikachu 66%), floored at 55%, exponent
-  1.0 (straight in log height), chosen by the user from side-by-side runs of four settings with
-  Battle Fit on. Why asymmetric: the art already grows with roughly
+  power curve on log height around 1.65 m: up to +25% at 20 m, down to −15% at 0.1 m, exponent
+  1.5, so most species stay within a few percent. Why asymmetric: the art already grows with roughly
   the 0.3 power of real height but flattens above ~1.7 m (Charizard 81 px, Wailord 74), so the
   giants need the help and the small ones are already small. Each back is first brought to its
   own front's size (`bn` on back cells: the front's resting body height over the back's, held to
