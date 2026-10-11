@@ -41,6 +41,32 @@ local BACK_ZOOM_MIN = 1      -- the exact zoom (gen3-hd-sprites) only zooms IN, 
 local BACK_ZOOM_MAX = 3
 local BACK_RAISE = 4         -- px a back pic WITHOUT a cart reference is lifted, to sit on the platform
 
+-- Realism scaling (gen3-hd-sprites only): a Pokemon's size from its real height. L = ln(h /
+-- center), span = ln(tallest / center); s = 1 + grow * (L / span)^curve above the neutral height
+-- and s = 1 - grow * (|L| / span)^curve below it: the same rate per doubling of height both ways
+-- (a Pokemon a quarter of a person's height shrinks as much as one four times taller grows),
+-- held between `floor` and 1 + grow. Heights in metres; `htDm` is the index's `ht`
+-- (decimetres). Returns 1 when off, or with no height. Pure.
+Atlas.REALISM = { on = true, center = 1.65, grow = 0.60, floor = 0.55, curve = 1.0,
+                  tallest = 20, front = 0.85, match_backs = true }
+function Atlas.realism(htDm, cfg)
+  cfg = cfg or Atlas.REALISM
+  local h = tonumber(htDm)
+  if cfg.on == false or not h or h <= 0 then return 1 end
+  h = h / 10
+  local function n(key) return tonumber(cfg[key]) or Atlas.REALISM[key] end
+  local center, p, grow = n("center"), n("curve"), n("grow")
+  local span = math.log(n("tallest") / center)
+  if span <= 0 then return 1 end
+  local L = math.log(h / center)
+  if L > 0 then
+    return 1 + grow * math.min(1, L / span) ^ p
+  elseif L < 0 then
+    return math.max(n("floor"), 1 - grow * (-L / span) ^ p)
+  end
+  return 1
+end
+
 -- px the player's back pic is lowered on top of its cell's feet line: 4 on Ruby / Sapphire,
 -- which draw the player's pic 4 px higher than FireRed / LeafGreen / Emerald (set by main.lua)
 Atlas.backShift = 0
@@ -203,11 +229,20 @@ function Atlas.new(mod, load)
   end
   -- (where an enemy front pic's feet go is in the atlas itself: the cell's drop `fy`, which
   -- tools/build_atlas.py works out for every species, with or without gen3-hd-sprites)
+  -- realism scaling's settings (data/sprite_scale.lua `realism`, over Atlas.REALISM)
+  local realismCfg = {}
+  for k, v in pairs(Atlas.REALISM) do realismCfg[k] = v end
+  if type(tuning.realism) == "table" then
+    for k, v in pairs(tuning.realism) do realismCfg[k] = v end
+  end
+  self.realismCfg = realismCfg
+  -- -> the species' own tuning, the `all` row, and its realism scale (1 when off)
   local function tuned(slot)
     local rec = bySlot[tonumber(slot)]
     local own = rec and tuning[rec.id]
     local all = type(tuning.all) == "table" and tuning.all or {}
-    return type(own) == "table" and own or {}, all
+    local real = rec and Atlas.realism(rec.cells.ht, realismCfg) or 1
+    return type(own) == "table" and own or {}, all, real
   end
 
   -- A page is loaded once and kept. A failed load is NOT kept: assets:path()
@@ -379,13 +414,17 @@ function Atlas.new(mod, load)
     -- 1:1 with the game's pixel grid (the atlas already holds game pixels), so a
     -- small species stays small; only a sprite larger than the box is reduced
     local s, ox, oy, wide, ls
-    local own, all = tuned(dex)
+    local own, all, real = tuned(dex)
     local xmin, xmax, ymin, ymax = 0, PIC_BOX, 0, PIC_BOX
     if hd then
       -- the same layout as the wide canvas, but the canvas stays the 64x64 box: the
       -- full frame is drawn by gen3-hd-sprites, this is only what shows if it cannot
       if isBack then
-        ls, ox, oy = Atlas.backLayout(cell, true, true, tonumber(own.back))
+        -- its size scales about the feet line: hand-set, times realism, times `bn` (the back art
+        -- brought to its own front art's size, so a Pokemon is the same size from both sides)
+        local bn = 1
+        if realismCfg.on ~= false and realismCfg.match_backs ~= false then bn = tonumber(cell.bn) or 1 end
+        ls, ox, oy = Atlas.backLayout(cell, true, true, (tonumber(own.back) or 1) * real * bn)
       else
         ls, ox, oy = Atlas.frontLayout(cell)
       end
@@ -427,27 +466,37 @@ function Atlas.new(mod, load)
     end)
     for _, t in ipairs(temps) do t:release() end
     if hd then
-      -- the point the HD frame is anchored on: the feet (bottom-centre of the frame) for a
-      -- front, so a size change keeps it standing on its spot; the box's centre for a back
+      -- the point the HD frame is anchored on: the FEET (the resting pose's bottom row, `ffr`
+      -- / `bfr`), so a size change (hand-set, realism) keeps the Pokemon standing on its pad
       local lx, ly
       if isBack then
-        lx, ly = PIC_BOX / 2, PIC_BOX / 2
+        local cx = ((cell.cx0 or 0) + (cell.cx1 or fs)) / 2
+        lx, ly = ox + ls * cx, oy + ls * (tonumber(cell.bfr) or fs / 2)
       else
-        lx, ly = ox + ls * fs / 2, oy + ls * fs
+        lx, ly = ox + ls * fs / 2, oy + ls * (tonumber(cell.ffr) or fs)
       end
-      -- hand-tuned size and nudge (data/sprite_scale.lua)
+      -- hand-tuned size and nudge (data/sprite_scale.lua); a back's own size and its realism
+      -- are already in `ls` (backLayout); a front's realism carries the perspective factor too
       local mul = tonumber(isBack and all.back or all.front) or 1
       local dx = tonumber(isBack and own.back_dx or own.front_dx) or 0
       local dy = tonumber(isBack and own.back_dy or own.front_dy) or 0
-      local k = isBack and 1 or (tonumber(own.front) or 1)
+      local k = 1
+      if not isBack then
+        local persp = realismCfg.on == false and 1 or (tonumber(realismCfg.front) or 1)
+        k = (tonumber(own.front) or 1) * real * persp
+      end
       hd.tag(canvas, {
         texture = img, quad = quad,
         lowPivot = { lx + dx, ly + dy },
         pivot = { (lx - ox) / ls, (ly - oy) / ls },
         scale = ls * k * mul,
-        -- a front's first row of art over its whole animation: gen3-hd-sprites' Battle Fit
-        -- pulls the camera back to fit the art, not the frame's empty margin above it
-        top = not isBack and tonumber(cell.uy0) or nil,
+        -- the first row of art over the whole animation: gen3-hd-sprites' Battle Fit pulls the
+        -- camera back to fit the art, not the frame's empty margin above it
+        top = tonumber(cell.uy0),
+        -- whose Pokemon this is; a back's resting body box (frame px), which Battle Fit keeps
+        -- mostly out from under the HP boxes and the text box
+        side = isBack and "player" or "enemy",
+        body = isBack and cell.cx0 and { cell.cx0, cell.cy0, cell.cx1, cell.cy1 } or nil,
       })
     elseif dexHd then
       -- the Pokedex: the whole frame at window resolution, fitted to the box exactly as the

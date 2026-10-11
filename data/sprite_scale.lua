@@ -9,15 +9,30 @@
 --
 --   front    size of the ENEMY's front pic, 1 = 100%. Default 1 (the sprite's own size). It scales
 --            about the feet, so a smaller Pokemon keeps standing on its spot.
---   back     size of YOUR Pokemon's back pic, 1 = 100%. Default: zoomed in to match the cart's
---            back sprite (tools/back_framing.py). Setting it replaces that zoom.
+--   back     size of YOUR Pokemon's back pic, 1 = 100%. Default 1, about the feet too.
 --   front_dx, front_dy, back_dx, back_dy
 --            nudge in game pixels (positive = right / down), on top of where the sprite already
---            stands: the back on the cart's framing, the front with its feet on the platform's
---            centre (worked out in the atlas, with or without HD Sprites). These nudges are HD
---            Sprites only; a nudge for everyone goes in the atlas (FRONT_NUDGE, tools/build_atlas.py).
+--            stands: feet on the middle of its pad (worked out in the atlas, with or without HD
+--            Sprites). These nudges are HD Sprites only; a nudge for everyone goes in the atlas
+--            (FRONT_NUDGE, tools/build_atlas.py).
 --
 -- `all` below scales every Pokemon on top of the above (1 = no change).
+--
+-- `realism` sizes each Pokemon by its real height (the Pokedex's), on top of the above:
+--   on       false turns it off (every Pokemon at its sprite's own size)
+--   center   the neutral height in metres (1.65 = 5'5"): a Pokemon this tall keeps its size
+--   grow     how much the tallest grows (0.60 = 60% bigger at `tallest`); small Pokemon
+--            shrink at the same rate per halving of height (Pikachu 66%)
+--   floor    the smallest a Pokemon is drawn (0.55 = 55%: Joltik, Flabebe)
+--   curve    1 = even steps in height; higher = more Pokemon stay near their own size and
+--            only the true extremes reach the limits
+--   tallest  the height (m) that gets the full `grow`
+--   front    the enemy's front pic is this much smaller for perspective (it stands farther
+--            away; the cart's own fronts are about 0.90 the width of its backs, and 0.85 reads
+--            better next to the art's own sizes)
+--   match_backs   true: each Pokemon's back is first brought to its own front's size (the two
+--            sheets are drawn at different sizes for some species: Tinkaton's back is small,
+--            Tatsugiri's big), so a Pokemon is the same size from both sides
 --
 -- Examples:
 --   NOIVERN  = { front = 0.6 },                        -- 60% (the front frame is 182 px tall)
@@ -26,6 +41,9 @@
 
 return {
   all = { front = 1, back = 1 },
+
+  realism = { on = true, center = 1.65, grow = 0.60, floor = 0.55, curve = 1.0,
+              tallest = 20, front = 0.85, match_backs = true },
 
   NOIVERN = { front = 0.6, front_dy = -2 },
 }

@@ -106,6 +106,28 @@ def read_species_ids(payload: Path) -> list[tuple[int, str]]:
     return recs
 
 
+def read_heights(payload: Path, gen3_data: Path, slots: dict[str, int]) -> dict[str, int]:
+    """Each species' height in decimetres, for gen3-hd-sprites' realism scaling: #387+ from
+    national_dex_gen3's payload (dexEntry.height, from PokeAPI), Gen 1-3 from the cart's own
+    Pokedex entries (pokedex/entries.lua, keyed by engine slot)."""
+    out: dict[str, int] = {}
+    for path in sorted(glob.glob(str(payload / "[0-9]*.lua"))):
+        text = Path(path).read_text(encoding="utf-8")
+        for block in re.split(r"\n  \{", text):
+            i = re.search(r'\bid = "([^"]+)"', block)
+            h = re.search(r"dexEntry = \{[^}]*\bheight = (\d+)", block)
+            if i and h:
+                out[i.group(1)] = int(h.group(1))
+    entries = gen3_data / "pokedex" / "entries.lua"
+    if entries.exists():
+        pattern = r'^\s*\[(\d+)\] = \{ category = "[^"]*", height = (\d+)'
+        by_slot = {int(a): int(b) for a, b in re.findall(pattern, entries.read_text(encoding="utf-8"), re.M)}
+        for sid, slot in slots.items():
+            if slot <= 411 and by_slot.get(slot):
+                out.setdefault(sid, by_slot[slot])
+    return out
+
+
 # Gen 1-3 (#1-386) are not in national_dex_gen3's payload: they are the game's own species.
 # Their names and the National Dex number of each internal species id come from the engine's
 # extracted pokemon data (names.lua, national.lua), and their atlas slot is the internal id.
@@ -308,6 +330,9 @@ def trim_window(trims: dict, sid: str, variant: str, frames: int) -> tuple[int, 
 # higher and the runtime adds those 4 back (src/atlas.lua backShift). gen3-hd-sprites' Battle Fit
 # zooms the scene out about the text box's top, so a tall back still fits.
 BACK_FEET_ROW = 67
+# the most a back is scaled to match its front's size (`bn`): a pose that differs a lot between
+# the two sheets (lying down from the front, rearing up from behind) is not taken at face value
+BACK_NORM_LIMITS = (0.67, 1.5)
 ENGINE_PIC_COORDS = ROOT.parent / "gen1recomp" / "src" / "core" / "game3" / "battle" / "pic_coords.lua"
 
 
@@ -329,6 +354,8 @@ def build_battle(sheets: Path, dbk: dict[str, str], species: list[tuple[int, str
     of at most PAGE_SIZE x PAGE_SIZE, per variant. A cell records its block's
     origin: frame n of a species is cell start + n, at
     (ox + (start + n) % cols * fs, oy + (start + n) // cols * fs) on page `sheet`."""
+    # each species' resting body height on its front sheet: a back is normalised to it (`bn`)
+    front_h: dict[str, int] = {}
     for variant in VARIANTS:
         folder = sheets / variant
         groups: dict[int, list[tuple[int, str, Image.Image, int]]] = {}
@@ -413,16 +440,35 @@ def build_battle(sheets: Path, dbk: dict[str, str], species: list[tuple[int, str
                                  "ux0": extent[0], "uy0": extent[1], "ux1": extent[2], "uy1": extent[3]})
                     # stood on its feet like the fronts: its resting pose's bottom row (the
                     # frames most alike, tools/front_pose.py) goes on the player's feet line
-                    rest = fp.rest_bottom([img.crop((n * fs, 0, (n + 1) * fs, fs)) for n in range(frames)])
+                    kept = [img.crop((n * fs, 0, (n + 1) * fs, fs)) for n in range(frames)]
+                    rest = fp.rest_bottom(kept)
                     if rest is not None:
                         cell["bfr"] = int(rest)
                         cell["bfl"] = int((back_lines or {}).get(sid, BACK_FEET_ROW))
+                    # the back art's size against the same species' front art (resting body
+                    # heights): gen3-hd-sprites draws the back at this scale so a Pokemon is the same
+                    # size from both sides, before realism and perspective (BACK_NORM_LIMITS)
+                    bh = fp.rest_height(kept)
+                    if bh and front_h.get(sid):
+                        lo, hi = BACK_NORM_LIMITS
+                        cell["bn"] = round(min(hi, max(lo, front_h[sid] / bh)), 3)
                 if variant not in BACK_VARIANTS and extent:
                     # the first row of art over the whole animation: gen3-hd-sprites' Battle Fit
                     # fits the art under the top of the screen, not the frame's empty margin
                     cell["uy0"] = extent[1]
                 if variant not in BACK_VARIANTS and front_fy(sid):
                     cell["fy"] = front_fy(sid)
+                if variant not in BACK_VARIANTS:
+                    # the resting pose's bottom row: gen3-hd-sprites' realism scaling sizes the
+                    # front about its feet, so they stay on the pad
+                    kept = [img.crop((n * fs, 0, (n + 1) * fs, fs)) for n in range(frames)]
+                    rest = fp.rest_bottom(kept)
+                    if rest is not None:
+                        cell["ffr"] = int(rest)
+                    if variant == "front":
+                        fh = fp.rest_height(kept)
+                        if fh:
+                            front_h[sid] = fh
                 index.setdefault(sid, {})[variant] = cell
                 start += frames
         names = save(shelf.pages, f"battle_{variant}", out_dir, used_w, used_h)
@@ -646,8 +692,12 @@ def write_index(index: dict[str, dict], path: Path, species: list[tuple[int, str
                     text += f', uy0 = {c["uy0"]}'
                 if "fy" in c:
                     text += f', fy = {c["fy"]}'
+                if "ffr" in c:
+                    text += f', ffr = {c["ffr"]}'
                 if "bfr" in c:
                     text += f', bfr = {c["bfr"]}, bfl = {c["bfl"]}'
+                if "bn" in c:
+                    text += f', bn = {c["bn"]:g}'
                 parts.append(text + " }")
         if "icon" in entry:
             c = entry["icon"]
@@ -661,6 +711,8 @@ def write_index(index: dict[str, dict], path: Path, species: list[tuple[int, str
             owner = f'female_of = {slots[FEMALE_SHEETS[sid]]}'
         else:
             owner = f'slot = {slots[sid]}'
+        if entry.get("ht"):
+            owner += f', ht = {entry["ht"]}'      # height, dm (realism scaling)
         lines.append(f'    ["{sid}"] = {{ dex = {dex}, {owner}, ' + ", ".join(parts) + " },")
     lines += ["  },", "}", ""]
     path.write_text("\n".join(lines), encoding="utf-8")
@@ -751,6 +803,20 @@ def main() -> None:
                 reused += 1
     if reused:
         print(f"  {reused} form sprite(s) reuse their base species' art")
+    # each species' height (dm) for gen3-hd-sprites' realism scaling; a form or a female sheet
+    # takes its base species'
+    heights = read_heights(args.payload, args.gen3_data, slots)
+    base_of = {fid: base for _dex, fid, _slot, base in forms}
+    base_of.update(FEMALE_SHEETS)
+    no_height = []
+    for sid, entry in index.items():
+        ht = heights.get(sid) or heights.get(base_of.get(sid, ""))
+        if ht:
+            entry["ht"] = ht
+        else:
+            no_height.append(sid)
+    print(f"  heights: {len(index) - len(no_height)}/{len(index)} species"
+          + (f" (none for {', '.join(sorted(no_height))})" if no_height else ""))
     write_index(index, args.out / "data" / "atlas_index.lua", classic + species + females, slots)
     print("wrote", args.out / "data" / "atlas_index.lua")
 

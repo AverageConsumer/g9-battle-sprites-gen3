@@ -24,10 +24,19 @@ for id, rec in pairs(index) do
       check(c.bfl and c.bfl >= 30 and c.bfl <= 80, id .. " " .. variant .. " has a feet line in the box, got "
         .. tostring(c.bfl))
       check(c.bt == nil and c.bs == nil, id .. " " .. variant .. " has no cart framing left")
+      check(c.bn == nil or (c.bn >= 0.67 and c.bn <= 1.5), id .. " " .. variant .. " back/front match within limits")
     end
   end
 end
 check(n >= 2200, "a back and a shiny back for every species (" .. n .. ")")
+-- realism scaling (gen3-hd-sprites): every species has its height, every front its feet row
+for id, rec in pairs(index) do
+  check(type(rec.ht) == "number" and rec.ht > 0, id .. " has a height")
+  for _, variant in ipairs({ "front", "front_shiny" }) do
+    local c = rec[variant]
+    if c then check(c.ffr and c.ffr > 0 and c.ffr <= c.fs, id .. " " .. variant .. " has its feet row") end
+  end
+end
 -- a shiny back stands where its normal sheet does
 for id, rec in pairs(index) do
   if rec.back and rec.back_shiny then

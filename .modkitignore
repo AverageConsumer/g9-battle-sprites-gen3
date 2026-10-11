@@ -30,3 +30,4 @@ CLAUDE.md
 # dist/ (managed by tools/build_dist.py; do not edit)
 dist/g9-battle-sprites-gen3-1.4.1.zip
 # end dist/
+tests/realism_test.lua

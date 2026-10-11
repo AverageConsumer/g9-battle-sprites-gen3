@@ -88,6 +88,13 @@ def rest_bottom(frames: list[Image.Image]) -> int | None:
     return int(statistics.median_low(rest)) if rest else None
 
 
+def rest_height(frames: list[Image.Image]) -> int | None:
+    """The body's height in the resting pose: the median, over the rest cluster, of each frame's
+    opaque height. Compares a species' back art with its front art."""
+    hs = [b[3] - b[1] for b in (frames[i].getbbox() for i in rest_cluster(frames)) if b]
+    return int(statistics.median_low(hs)) if hs else None
+
+
 def rest_gap(sheet: Path, window=None) -> tuple[int, int, list[Image.Image]] | None:
     """(empty rows under the resting pose, frame size, the kept frames), or None for an empty sheet."""
     frames, fs = load_frames(sheet, window)

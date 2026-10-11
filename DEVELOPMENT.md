@@ -48,6 +48,21 @@ Output is deterministic: the same inputs give identical bytes. Supporting tools:
   draw the player's pic 4 px higher; `Atlas.backShift` adds them back at runtime. A tall back is
   left to Gen 3 HD Sprites' Battle Fit. (`tools/back_framing.py` and `tools/back_fit.py`, the old
   cart framing, are no longer used by the build.)
+- Realism scaling (Gen 3 HD Sprites only, `Atlas.realism`, settings in `data/sprite_scale.lua`
+  `realism`): each species' height `ht` (dm) is written to the index from the cart's Pokédex
+  entries (`pokemon/pokedex/entries.lua`, keyed by engine slot) for Gen 1–3 and national_dex_gen3's
+  `dexEntry.height` (PokeAPI) for #387+; forms and female sheets take their base's. The scale is a
+  power curve on log height around 1.65 m: up to +60% at 20 m and down at the same rate per halving of height (Pikachu 66%), floored at 55%, exponent
+  1.0 (straight in log height), chosen by the user from side-by-side runs of four settings with
+  Battle Fit on. Why asymmetric: the art already grows with roughly
+  the 0.3 power of real height but flattens above ~1.7 m (Charizard 81 px, Wailord 74), so the
+  giants need the help and the small ones are already small. Each back is first brought to its
+  own front's size (`bn` on back cells: the front's resting body height over the back's, held to
+  0.67–1.5; Tinkaton's back art is small, Tatsugiri's big), then fronts are a further ×0.85 for
+  perspective (the cart's own fronts are a median 0.90× the width of its backs; ×0.85 reads
+  better: Wailord's back vs Joltik's front then shows a bigger gap than the other way round, as
+  depth should). Every size change is made about the feet (`ffr` on front cells, `bfr` on back
+  cells), so the Pokémon stays on its pad.
 
 Every file under `tools/` and `tests/` is listed by exact path in `.modkitignore` so none of
 them ships; add a line for each new one.
@@ -69,10 +84,11 @@ fit-to-box pic. Animation runs at 8 frames per second; battlers of one species s
 
 With Gen 3 HD Sprites, battle pics are drawn at window resolution and `data/sprite_scale.lua`
 tunes each Pokémon's front and back size and offset by hand (edit and restart, no rebuild).
-Each front tag also passes `top`: the cell's `uy0` in `data/atlas_index.lua`, which is the
+Each battle tag also passes `top`: the cell's `uy0` in `data/atlas_index.lua`, which is the
 first row of art over the whole animation, written by `tools/build_atlas.py`. With that,
 Gen 3 HD Sprites' Battle Fit pulls the camera back to fit the art, not the frame's empty
-margin.
+margin. Each tag also passes `side`, `"enemy"` or `"player"`. A back adds `body`, its resting
+body box (`cx0`…`cy1`). Battle Fit keeps that body's top at or below the tallest cart back sprite's (y 52). When it can, it also keeps at most 30% of the body under the player's HP box and the text box. A back's `top` (its whole animation) only has to stay on the screen.
 
 ## Tests
 

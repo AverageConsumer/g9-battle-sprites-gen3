@@ -31,8 +31,9 @@ and 2).
 - 📖 **A Pokédex that fits the game:** Ruby, Sapphire and Emerald's Pokédex uses cart-style
   pictures; FireRed and LeafGreen's shows the animated art.
 - 🖥️ **HD battles** (with [Gen 3 HD Sprites](https://github.com/poooooby/gen3-hd-sprites)): battle
-  sprites are drawn crisply at your screen's resolution, with each Pokémon sized to match its
-  original sprite.
+  sprites are drawn crisply at your screen's resolution, and each Pokémon is sized by its real
+  height: giants like Wailord and Rayquaza stand a bit taller, tiny ones a bit smaller, and the
+  foe is drawn a little smaller for depth. Every Pokémon keeps its feet on its pad.
 - 📱 **Phone-friendly:** Everything is packed into a handful of images small enough for Android
   devices.
 
